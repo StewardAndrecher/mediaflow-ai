@@ -1,0 +1,217 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>MediaFlow AI · 智能媒体内容工作流</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="brand">
+        <span class="brand-mark">MF</span>
+        <span class="brand-copy">
+          <strong>MediaFlow AI</strong>
+          <small>智能媒体内容工作流平台</small>
+        </span>
+      </div>
+      <div class="topbar-meta">
+        <span class="live-dot" aria-hidden="true"></span>
+        <span id="health-label">平台在线</span>
+        <span class="divider"></span>
+        <span id="model-mode">加载模型状态…</span>
+        <a class="topbar-link" href="/actuator/prometheus" target="_blank" rel="noreferrer">Prometheus ↗</a>
+      </div>
+    </header>
+
+    <main class="shell">
+      <section class="hero">
+        <div>
+          <p class="eyebrow">AI APPLICATION PLATFORM / 2026</p>
+          <h1>把模型调用，变成<br /><em>可运营的内容流水线</em></h1>
+        </div>
+        <p class="hero-copy">
+          一个面向媒体团队的工作流运行时：编排摘要、标题、质量评分与人工复核，
+          记录每一次运行的节点耗时、Token 与失败原因。
+        </p>
+      </section>
+
+      <section class="metric-grid" aria-label="平台指标">
+        <article class="metric-card">
+          <span class="metric-label">累计运行</span>
+          <strong id="metric-total">0</strong>
+          <span class="metric-note">workflow runs</span>
+        </article>
+        <article class="metric-card">
+          <span class="metric-label">已通过</span>
+          <strong id="metric-succeeded">0</strong>
+          <span class="metric-note">approved by editor</span>
+        </article>
+        <article class="metric-card metric-warn">
+          <span class="metric-label">待人工复核</span>
+          <strong id="metric-waiting">0</strong>
+          <span class="metric-note">human in the loop</span>
+        </article>
+        <article class="metric-card">
+          <span class="metric-label">累计 Token</span>
+          <strong id="metric-tokens">0</strong>
+          <span class="metric-note">prompt + completion</span>
+        </article>
+        <article class="metric-card">
+          <span class="metric-label">平均端到端耗时</span>
+          <strong id="metric-duration">—</strong>
+          <span class="metric-note">approved / rejected runs</span>
+        </article>
+      </section>
+
+      <div class="workspace">
+        <aside class="left-column">
+          <article class="panel composer">
+            <div class="panel-heading">
+              <div>
+                <p class="section-kicker">NEW RUN</p>
+                <h2>发起一次内容评审</h2>
+              </div>
+              <button class="text-button" id="demo-button" type="button">填入示例</button>
+            </div>
+
+            <form id="run-form">
+              <label class="field">
+                <span>内容标题</span>
+                <input id="title-input" name="title" maxlength="200" placeholder="例如：AI 如何重塑编辑部" required />
+              </label>
+              <label class="field">
+                <span>正文素材 <small id="char-count">0 / 12000</small></span>
+                <textarea id="content-input" name="content" rows="10" maxlength="12000" placeholder="粘贴待评审的媒体内容…" required></textarea>
+              </label>
+              <div class="field-row">
+                <label class="field compact">
+                  <span>来源</span>
+                  <select id="source-input" name="source">
+                    <option value="manual">手工录入</option>
+                    <option value="cms">CMS 同步</option>
+                    <option value="rss">RSS 采集</option>
+                    <option value="api">开放 API</option>
+                  </select>
+                </label>
+                <label class="field compact">
+                  <span>工作流模板</span>
+                  <select id="template-input" name="templateId"></select>
+                </label>
+              </div>
+              <div class="pipeline-preview">
+                <span>校验</span><i></i><span>摘要</span><i></i><span>标题</span><i></i><span>评分</span><i></i><span>复核</span>
+              </div>
+              <button class="primary-button" id="submit-button" type="submit">
+                <span>启动工作流</span>
+                <span aria-hidden="true">→</span>
+              </button>
+              <p class="form-hint">提交后由队列派发；同一 Idempotency-Key 不会产生重复运行。</p>
+            </form>
+          </article>
+
+          <article class="panel run-list-panel">
+            <div class="panel-heading">
+              <div>
+                <p class="section-kicker">RECENT RUNS</p>
+                <h2>最近运行</h2>
+              </div>
+              <button class="icon-button" id="refresh-button" type="button" title="刷新">↻</button>
+            </div>
+            <div id="run-list" class="run-list">
+              <p class="empty-compact">还没有运行记录，先发起一次评审。</p>
+            </div>
+          </article>
+        </aside>
+
+        <section class="right-column">
+          <article class="panel result-panel" id="result-panel">
+            <div class="empty-state" id="empty-state">
+              <div class="empty-pipeline" aria-hidden="true">
+                <div class="empty-node"><b>01</b><span>VALIDATE</span></div>
+                <div class="empty-line"></div>
+                <div class="empty-node"><b>02</b><span>SUMMARIZE</span></div>
+                <div class="empty-line"></div>
+                <div class="empty-node"><b>03</b><span>TITLE</span></div>
+                <div class="empty-line"></div>
+                <div class="empty-node"><b>04</b><span>QUALITY</span></div>
+                <div class="empty-line"></div>
+                <div class="empty-node accent"><b>05</b><span>REVIEW</b></div>
+              </div>
+              <h2>等待一次工作流运行</h2>
+              <p>左侧提交素材后，这里会显示节点的实时状态、模型输出和人工复核入口。</p>
+              <button class="outline-button" id="empty-demo-button" type="button">运行示例素材</button>
+            </div>
+
+            <div id="run-detail" class="run-detail hidden">
+              <header class="run-header">
+                <div>
+                  <p class="section-kicker">WORKFLOW RUN</p>
+                  <h2 id="detail-title">—</h2>
+                  <p class="run-meta"><span id="detail-id">—</span><span class="dot"></span><span id="detail-time">—</span></p>
+                </div>
+                <div class="run-header-right">
+                  <span class="status-pill" id="detail-status">—</span>
+                  <button class="text-button" id="copy-output-button" type="button">复制结果 JSON</button>
+                </div>
+              </header>
+
+              <section class="timeline" aria-label="工作流节点时间线">
+                <div class="timeline-head">
+                  <span>执行时间线</span>
+                  <span id="timeline-summary">—</span>
+                </div>
+                <div class="node-strip" id="node-strip"></div>
+              </section>
+
+              <section class="output-section">
+                <div class="output-heading">
+                  <span class="section-kicker">MODEL OUTPUT</span>
+                  <h3>本次运行产物</h3>
+                </div>
+                <div id="output-grid" class="output-grid"></div>
+              </section>
+
+              <section class="review-section" id="review-section">
+                <div class="review-copy">
+                  <p class="section-kicker">HUMAN REVIEW</p>
+                  <h3>发布前，由编辑做最后判断</h3>
+                  <p>模型只负责生成与评分，是否发布仍由人决定。复核结果会写入运行记录。</p>
+                </div>
+                <div class="review-form">
+                  <label class="field">
+                    <span>复核意见 <small>可选</small></span>
+                    <textarea id="review-comment" rows="3" placeholder="记录修改建议或通过理由…"></textarea>
+                  </label>
+                  <div class="review-actions">
+                    <button class="danger-button" id="reject-button" type="button">驳回</button>
+                    <button class="primary-button small" id="approve-button" type="button">通过并完成</button>
+                  </div>
+                </div>
+              </section>
+
+              <details class="raw-details">
+                <summary>查看完整结果 JSON</summary>
+                <pre id="raw-output"></pre>
+              </details>
+            </div>
+          </article>
+
+          <article class="panel architecture-panel">
+            <div class="architecture-copy">
+              <p class="section-kicker">RUNTIME</p>
+              <h3>一个可观测的 AI 工作流运行时</h3>
+              <p>Spring Boot 负责编排与幂等，MySQL 持久化节点状态，Redis 缓存运行详情，RabbitMQ 解耦派发，Prometheus 与 Grafana 负责指标。</p>
+            </div>
+            <div class="tech-stack">
+              <span>Spring Boot 4</span><span>MySQL 8</span><span>Redis</span><span>RabbitMQ</span><span>Prometheus</span><span>Grafana</span><span>Docker</span>
+            </div>
+          </article>
+        </section>
+      </div>
+    </main>
+
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+    <script src="/app.js"></script>
+  </body>
+</html>

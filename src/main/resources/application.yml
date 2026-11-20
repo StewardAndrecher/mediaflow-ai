@@ -1,0 +1,66 @@
+spring:
+  application:
+    name: mediaflow-ai
+  datasource:
+    url: ${DB_URL:jdbc:mysql://localhost:3308/mediaflow?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC}
+    username: ${DB_USER:mediaflow}
+    password: ${DB_PASSWORD:mediaflow-demo}
+    hikari:
+      maximum-pool-size: 8
+      connection-timeout: 5000
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6381}
+      timeout: 2s
+  rabbitmq:
+    host: ${RABBITMQ_HOST:localhost}
+    port: ${RABBITMQ_PORT:5680}
+    username: ${RABBITMQ_USER:mediaflow}
+    password: ${RABBITMQ_PASSWORD:mediaflow-demo}
+    listener:
+      simple:
+        auto-startup: true
+        prefetch: 1
+
+server:
+  port: ${SERVER_PORT:8090}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus,metrics
+  endpoint:
+    health:
+      show-details: always
+  metrics:
+    tags:
+      application: mediaflow-ai
+    distribution:
+      percentiles-histogram:
+        ai_workflow_node_duration_seconds: true
+        ai_workflow_run_duration_seconds: true
+
+app:
+  queue:
+    enabled: ${QUEUE_ENABLED:false}
+    name: mediaflow.workflow.runs
+  ai:
+    provider: ${AI_PROVIDER:mock}
+    base-url: ${LLM_BASE_URL:https://api.openai.com/v1}
+    api-key: ${LLM_API_KEY:}
+    model: ${LLM_MODEL:gpt-4.1-mini}
+    timeout-seconds: ${LLM_TIMEOUT_SECONDS:30}
+  workflow:
+    max-content-length: 12000
+  cache:
+    run-ttl-seconds: 30
+
+logging:
+  level:
+    com.mediaflow: INFO
+    org.springframework.amqp: WARN

@@ -1,0 +1,9 @@
+.DS_Store
+target/
+.unpackage/
+.env
+*.log
+.idea/
+*.iml
+.vscode/
+node_modules/
