@@ -17,6 +17,10 @@ public class WorkflowMetrics {
         registry.gauge("ai_workflow_active_runs", activeRuns);
     }
 
+    public void runCreated(String templateId) {
+        counter("ai_workflow_runs_total", "template", templateId, "status", "created").increment();
+    }
+
     public void runQueued(String templateId) {
         counter("ai_workflow_runs_total", "template", templateId, "status", "queued").increment();
     }

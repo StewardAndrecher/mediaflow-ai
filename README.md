@@ -25,7 +25,7 @@ MediaFlow AI 用一条五节点工作流把这些工程问题显式化：
 - **幂等创建**：`Idempotency-Key` 唯一约束，重复提交返回同一 `runId`，不重复消耗模型调用。
 - **节点级容错**：每个模型节点独立超时与重试，失败写入节点状态、错误信息和失败指标。
 - **Human-in-the-loop**：模型完成后进入 `WAITING_REVIEW`，编辑通过或驳回后才结束运行。
-- **可观测**：Micrometer 暴露运行数、节点耗时、Token、失败次数与活跃运行数；Prometheus 抓取，Grafana 预置看板。
+- **可观测**：Micrometer 暴露运行创建、状态迁移、节点耗时、Token、失败次数与活跃运行数；Prometheus 抓取，Grafana 预置看板。
 - **缓存降级**：Redis 缓存运行详情 30 秒；Redis 不可用时自动回源 MySQL，不影响主流程。
 - **一键启动**：Docker Compose 编排应用、MySQL、Redis、RabbitMQ、Prometheus 与 Grafana。
 
@@ -37,9 +37,11 @@ MediaFlow AI 用一条五节点工作流把这些工程问题显式化：
 
 ![人工复核](docs/console-review.png)
 
-Grafana 看板展示累计运行、通过率、活跃运行、Token、节点 P95 耗时与失败计数。
+Grafana 看板展示本进程创建运行、通过率、活跃运行、Token、节点 P95 耗时与失败计数。
 
 ![Grafana 看板](docs/grafana-dashboard.png)
+
+控制台的累计运行来自 MySQL 全量记录；Prometheus Counter 随应用进程重启归零，因此看板的“本进程创建运行”可能小于控制台历史总数。
 
 ## 架构
 
@@ -212,7 +214,7 @@ curl -X POST http://localhost:8090/api/runs \
 
 | 指标 | 类型 | 标签 |
 |---|---|---|
-| `ai_workflow_runs_total` | Counter | `template`, `status` |
+| `ai_workflow_runs_total` | Counter | `template`, `status`（`created` 表示真实创建，其余为状态迁移） |
 | `ai_workflow_run_duration_seconds` | Timer / Histogram | `template`, `status` |
 | `ai_workflow_nodes_total` | Counter | `template`, `node`, `status` |
 | `ai_workflow_node_duration_seconds` | Timer / Histogram | `template`, `node` |
@@ -225,7 +227,8 @@ Grafana 预置看板 `MediaFlow AI · Workflow Runtime`，包含累计运行、�
 ### 已验证的观测链路
 
 - Prometheus target `mediaflow-ai` 状态为 `up`。
-- 查询 `sum(ai_workflow_runs_total)` 返回累计运行数；`sum(ai_workflow_tokens_total)` 返回累计 Token；`histogram_quantile` 可计算节点 P95。
+- 查询 `sum(ai_workflow_runs_total{status="created"})` 返回真实创建次数；其余 `status` 记录状态迁移，不能直接求和当作运行数。
+- 查询 `sum(ai_workflow_tokens_total)` 返回累计 Token；`histogram_quantile` 可计算节点 P95。
 - Grafana 匿名 Viewer 可打开 `http://localhost:3002/d/mediaflow-runtime`，看板由 Provisioning 自动创建，不需要手工配置数据源。
 
 ## 项目结构
@@ -268,7 +271,7 @@ mediaflow-ai/
 - 人工复核：通过后运行变为 `SUCCEEDED`；样本记录 410 / 424 / 418 Token，首个样本运行跨度约 13.8 秒（包含人工等待）。
 - Redis：读取运行详情后生成 `mediaflow:run:<id>`，TTL 为 30 秒；Redis 不可用时读取逻辑自动回源 MySQL。
 - RabbitMQ：`mediaflow.workflow.runs` 队列消息数为 0，处理完成无堆积。
-- Prometheus：target `mediaflow-ai` 为 `up`；`/actuator/prometheus` 返回运行计数、节点耗时与 Token 指标。
+- Prometheus：target `mediaflow-ai` 为 `up`；`/actuator/prometheus` 返回创建次数、状态迁移、节点耗时与 Token 指标。
 - Grafana：`/d/mediaflow-runtime` 返回 HTTP 200，匿名 Viewer 可访问，五个统计面板与四个时间序列面板均完成 Provisioning。
 - Flyway：启动时成功应用 1 个迁移，版本 `v1`。
 - 应用启动：Java 17 下约 1.7 秒完成启动。

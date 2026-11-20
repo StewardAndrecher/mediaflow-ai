@@ -140,6 +140,7 @@ public class WorkflowService {
                             null,
                             null));
         }
+        metrics.runCreated(templateId);
         metrics.runQueued(templateId);
         dispatcher.dispatch(runId);
         RunStatus current =
