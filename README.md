@@ -1,5 +1,7 @@
 # MediaFlow AI
 
+[![CI](https://github.com/StewardAndrecher/mediaflow-ai/actions/workflows/ci.yml/badge.svg)](https://github.com/StewardAndrecher/mediaflow-ai/actions/workflows/ci.yml)
+
 面向智能媒体内容的 AI 工作流平台：把摘要、标题、质量评分与人工复核编排成可观测、可重试、可复盘的运行时。
 
 ![MediaFlow AI 控制台](docs/console-main.png)
@@ -21,6 +23,7 @@ MediaFlow AI 用一条五节点工作流把这些工程问题显式化：
 ## 核心能力
 
 - **定义驱动的工作流**：节点、顺序、超时、最大重试次数存放在 MySQL，不写死在业务代码里。
+- **模型输出约束**：摘要、标题与质量评分在写入节点前校验 JSON 结构、必需字段和分值范围；不合格输出进入失败重试，不污染运行记录。
 - **同步 / 异步双模式**：`QUEUE_ENABLED=false` 时请求线程直接执行，便于本地调试；`true` 时由 RabbitMQ 消费并异步派发。
 - **幂等创建**：`Idempotency-Key` 唯一约束，重复提交返回同一 `runId`，不重复消耗模型调用。
 - **节点级容错**：每个模型节点独立超时与重试，失败写入节点状态、错误信息和失败指标。
@@ -28,6 +31,7 @@ MediaFlow AI 用一条五节点工作流把这些工程问题显式化：
 - **可观测**：Micrometer 暴露运行创建、状态迁移、节点耗时、Token、失败次数与活跃运行数；Prometheus 抓取，Grafana 预置看板。
 - **缓存降级**：Redis 缓存运行详情 30 秒；Redis 不可用时自动回源 MySQL，不影响主流程。
 - **一键启动**：Docker Compose 编排应用、MySQL、Redis、RabbitMQ、Prometheus 与 Grafana。
+- **持续集成**：GitHub Actions 运行 `./mvnw verify`，同时校验 Java 格式与后端测试。
 
 ## 界面
 
@@ -265,7 +269,7 @@ mediaflow-ai/
 
 以下为 2026-11-20 本机实际执行结果，非估算：
 
-- `./mvnw test`：**6 项通过，0 失败，0 错误，0 跳过**；覆盖创建运行、人工复核、幂等重放、空内容校验、404、模板查询与节点重试。
+- `./mvnw test`：**8 项通过，0 失败，0 错误，0 跳过**；覆盖创建运行、人工复核、幂等重放、空内容校验、404、模板查询、节点重试与结构化输出校验。
 - `docker compose up -d --build`：app、MySQL、Redis、RabbitMQ、Prometheus、Grafana **六个容器均启动成功**，app 健康检查为 healthy。
 - RabbitMQ 异步链路：创建返回 `QUEUED`；消费者处理 5 个节点后进入 `WAITING_REVIEW`，`validate / summary / titles / quality` 均为 `SUCCEEDED`。
 - 人工复核：通过后运行变为 `SUCCEEDED`；样本记录 410 / 424 / 418 Token，首个样本运行跨度约 13.8 秒（包含人工等待）。

@@ -42,10 +42,14 @@ public class AiModelGateway {
 
     public ModelResult generate(
             String operation, String title, String content, String previousSummary) {
+        ModelResult result;
         if ("openai".equals(provider)) {
-            return callOpenAiCompatible(operation, title, content, previousSummary);
+            result = callOpenAiCompatible(operation, title, content, previousSummary);
+        } else {
+            result = mock(operation, title, content, previousSummary);
         }
-        return mock(operation, title, content, previousSummary);
+        validateOutput(operation, result.content());
+        return result;
     }
 
     public String modeLabel() {
@@ -176,6 +180,57 @@ public class AiModelGateway {
     private ModelResult result(Map<String, Object> payload, int promptTokens) {
         String text = JSON.writeValueAsString(payload);
         return new ModelResult(text, promptTokens, Math.max(1, text.length() / 4));
+    }
+
+    void validateOutput(String operation, String text) {
+        try {
+            JsonNode root = JSON.readTree(text);
+            require(root != null && root.isObject(), "JSON object is required");
+            switch (operation) {
+                case "summary" -> {
+                    requireText(root, "summary");
+                    JsonNode keyPoints = root.path("keyPoints");
+                    require(
+                            keyPoints.isArray() && keyPoints.size() > 0,
+                            "summary.keyPoints must be a non-empty array");
+                }
+                case "title" -> {
+                    JsonNode titles = root.path("titles");
+                    require(
+                            titles.isArray() && titles.size() >= 3,
+                            "title.titles must contain at least three entries");
+                    requireText(root, "recommended");
+                }
+                case "quality" -> {
+                    JsonNode score = root.path("score");
+                    require(
+                            score.isInt() && score.asInt() >= 0 && score.asInt() <= 100,
+                            "quality.score must be an integer between 0 and 100");
+                    require(root.path("issues").isArray(), "quality.issues must be an array");
+                    require(
+                            root.path("dimensions").isObject(),
+                            "quality.dimensions must be an object");
+                    requireText(root, "verdict");
+                }
+                default -> {
+                    // No additional schema for non-model operations.
+                }
+            }
+        } catch (IllegalArgumentException error) {
+            throw new IllegalStateException(
+                    "invalid " + operation + " output: " + error.getMessage(), error);
+        } catch (Exception error) {
+            throw new IllegalStateException(
+                    "invalid " + operation + " output: " + error.getMessage(), error);
+        }
+    }
+
+    private void requireText(JsonNode root, String field) {
+        require(!root.path(field).asString().isBlank(), field + " must be non-empty text");
+    }
+
+    private void require(boolean condition, String message) {
+        if (!condition) throw new IllegalArgumentException(message);
     }
 
     private List<String> sentences(String content) {
